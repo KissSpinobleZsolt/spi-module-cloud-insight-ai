@@ -1,0 +1,32 @@
+{
+  "name": "Data Ingestion",
+  "scope": "dataIngestion",
+  "component": "./App",
+  "route": "data-ingestion",
+  "icon": "📥",
+  "roles": ["user", "admin"],
+  "description": "Upload, process, and manage structured data sources for your workspace.",
+  "remote_entry": "http://localhost:3002/remoteEntry.js",
+  "bots": [
+    {
+      "name": "Ingestion Q&A",
+      "type": "communicator",
+      "description": "Answers questions about data loaded into the Data Ingestion module.",
+      "model": "",
+      "system_prompt": "You are a data assistant. Help users understand the data they have ingested: schema, quality issues, record counts, and field values. Be specific and concise.",
+      "icon": "🔍",
+      "active": true,
+      "restricted": "user"
+    },
+    {
+      "name": "Ingestion Monitor",
+      "type": "watcher",
+      "description": "Monitors ingestion jobs and reports anomalies or failures.",
+      "model": "",
+      "system_prompt": "You are a data pipeline monitor. Analyze ingestion run summaries and report anomalies, failures, or data quality issues in structured form.",
+      "icon": "👁️",
+      "active": true,
+      "restricted": "user"
+    }
+  ]
+}
