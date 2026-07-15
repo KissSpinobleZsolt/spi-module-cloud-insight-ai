@@ -1,17 +1,17 @@
 {
-  "name": "Data Ingestion",
-  "scope": "dataIngestion",
+  "name": "CloudInsight AI",
+  "scope": "cloudInsightAI",
   "component": "./App",
-  "route": "data-ingestion",
-  "icon": "📥",
+  "route": "cloud-insight-ai",
+  "icon": "☁️",
   "roles": ["user", "admin"],
   "description": "Upload, process, and manage structured data sources for your workspace.",
   "remote_entry": "http://localhost:3002/remoteEntry.js",
   "bots": [
     {
-      "name": "Ingestion Q&A",
+      "name": "CloudInsight Q&A",
       "type": "communicator",
-      "description": "Answers questions about data loaded into the Data Ingestion module.",
+      "description": "Answers questions about data loaded into the CloudInsight AI module.",
       "model": "",
       "system_prompt": "You are a data assistant. Help users understand the data they have ingested: schema, quality issues, record counts, and field values. Be specific and concise.",
       "icon": "🔍",
@@ -19,7 +19,7 @@
       "restricted": "user"
     },
     {
-      "name": "Ingestion Monitor",
+      "name": "CloudInsight Monitor",
       "type": "watcher",
       "description": "Monitors ingestion jobs and reports anomalies or failures.",
       "model": "",

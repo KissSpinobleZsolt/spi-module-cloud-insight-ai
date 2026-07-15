@@ -9,7 +9,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     publicPath: 'auto',
-    uniqueName: 'dataIngestion',
+    uniqueName: 'cloudInsightAI',
     clean: true,
   },
   // React is provided by the spin-core host via window.React / window.ReactDOM.
@@ -32,7 +32,7 @@ module.exports = {
   },
   plugins: [
     new ModuleFederationPlugin({
-      name: 'dataIngestion',       // → window.dataIngestion (scope in spin-core)
+      name: 'cloudInsightAI',       // → window.cloudInsightAI (scope in spin-core)
       filename: 'remoteEntry.js',
       exposes: {
         './App': './src/App',      // → component: "./App" in spin-core
