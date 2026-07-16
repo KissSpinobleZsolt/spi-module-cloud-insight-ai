@@ -7,6 +7,61 @@
   "roles": ["user", "admin"],
   "description": "Upload, process, and manage structured data sources for your workspace.",
   "remote_entry": "http://localhost:3002/remoteEntry.js",
+  "backend_url": "http://cloud-insight-ai-backend:8000",
+  "i18n": {
+    "en": {
+      "cloudInsightAI": {
+        "title": "Data Ingestion",
+        "subtitle": "Upload, process, and manage structured data sources for your workspace.",
+        "newConnection": "+ New Connection",
+        "dataSources": "Data Sources",
+        "totalRecords": "Total Records",
+        "lastIngestion": "Last Ingestion",
+        "storageUsed": "Storage Used",
+        "acrossAllSources": "across all sources",
+        "ofWorkspaceQuota": "of workspace quota",
+        "dropText": "Drop files here to ingest",
+        "dropHint": "CSV, XLSX, JSON — max 50 MB per file",
+        "refresh": "Refresh",
+        "export": "Export",
+        "colName": "Name",
+        "colType": "Type",
+        "colRows": "Rows",
+        "colSize": "Size",
+        "colStatus": "Status",
+        "colUpdated": "Updated",
+        "statusReady": "ready",
+        "statusProcessing": "processing",
+        "statusError": "error"
+      }
+    },
+    "ro": {
+      "cloudInsightAI": {
+        "title": "Ingestie Date",
+        "subtitle": "Încarcă, procesează și gestionează surse de date structurate pentru spațiul tău de lucru.",
+        "newConnection": "+ Conexiune nouă",
+        "dataSources": "Surse de date",
+        "totalRecords": "Total înregistrări",
+        "lastIngestion": "Ultima ingestie",
+        "storageUsed": "Stocare utilizată",
+        "acrossAllSources": "din toate sursele",
+        "ofWorkspaceQuota": "din cota spațiului de lucru",
+        "dropText": "Trage fișierele aici pentru a ingesta",
+        "dropHint": "CSV, XLSX, JSON — max 50 MB per fișier",
+        "refresh": "Reîmprospătare",
+        "export": "Exportă",
+        "colName": "Nume",
+        "colType": "Tip",
+        "colRows": "Rânduri",
+        "colSize": "Dimensiune",
+        "colStatus": "Status",
+        "colUpdated": "Actualizat",
+        "statusReady": "gata",
+        "statusProcessing": "procesare",
+        "statusError": "eroare"
+      }
+    }
+  },
   "bots": [
     {
       "name": "CloudInsight Q&A",
@@ -16,7 +71,16 @@
       "system_prompt": "You are a data assistant. Help users understand the data they have ingested: schema, quality issues, record counts, and field values. Be specific and concise.",
       "icon": "🔍",
       "active": true,
-      "restricted": "user"
+      "restricted": "user",
+      "provider": "ollama",
+      "config_schema": {
+        "principals": "sources",
+        "configurations": [
+          { "key": "max_records", "label": "Max records in context", "type": "number", "min": 50, "max": 2000, "step": 50, "default": 500 },
+          { "key": "include_schema", "label": "Include schema info", "type": "boolean", "default": true },
+          { "key": "include_quality_issues", "label": "Surface quality issues", "type": "boolean", "default": true }
+        ]
+      }
     },
     {
       "name": "CloudInsight Monitor",
@@ -26,7 +90,20 @@
       "system_prompt": "You are a data pipeline monitor. Analyze ingestion run summaries and report anomalies, failures, or data quality issues in structured form.",
       "icon": "👁️",
       "active": true,
-      "restricted": "user"
+      "restricted": "user",
+      "provider": "ollama",
+      "config_schema": {
+        "principals": "sources",
+        "configurations": [
+          { "key": "error_threshold_pct", "label": "Error rate threshold (%)", "type": "number", "min": 0, "max": 100, "step": 5, "default": 20 },
+          { "key": "stale_hours", "label": "Stale source threshold (hours)", "type": "number", "min": 1, "max": 168, "step": 1, "default": 24 },
+          { "key": "min_row_count", "label": "Min expected row count", "type": "number", "min": 0, "max": 100000, "step": 100, "default": 0 },
+          { "key": "notify_on_quality", "label": "Report data quality issues", "type": "boolean", "default": true }
+        ],
+        "scheduler": [
+          { "key": "scan_interval_minutes", "label": "Monitor interval (minutes)", "type": "number", "min": 5, "max": 120, "step": 5, "default": 60 }
+        ]
+      }
     }
   ]
 }

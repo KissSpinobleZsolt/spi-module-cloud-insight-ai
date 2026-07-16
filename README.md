@@ -52,14 +52,37 @@ Navigate to **CloudInsight AI** in the sidebar.
 
 **AI bots**
 
-Two bots are seeded for this module (visible in the floating bot panel, bottom-left of the module page):
+Two bots are seeded for this module (visible in the floating bot panel, bottom-left of the module page). Both use the `ollama` provider and operate on the `sources` document collection (`principals` is a `module_documents` collection key, not a display name). The `model` field is left blank in the manifest — the admin selects a model at runtime via the bot config UI. Only the `custom`-type bot has a `scheduler` block; `communicator` bots are on-demand only.
 
 | Bot | Type | Purpose |
 |-----|------|---------|
 | CloudInsight Q&A | communicator | Ask questions about your ingested data — schema, field values, record counts |
-| CloudInsight Monitor | custom | Reports anomalies and processing failures |
+| CloudInsight Monitor | custom | Reports anomalies and processing failures on a schedule |
 
 To enable them: Admin → Bots → edit each bot → check **CloudInsight AI** under Modules → set Active.
+
+**CloudInsight Q&A — configurable parameters**
+
+| Key | Label | Type | Default |
+|-----|-------|------|---------|
+| `max_records` | Max records in context | number (50–2000, step 50) | 500 |
+| `include_schema` | Include schema info | boolean | true |
+| `include_quality_issues` | Surface quality issues | boolean | true |
+
+**CloudInsight Monitor — configurable parameters**
+
+| Key | Label | Type | Default |
+|-----|-------|------|---------|
+| `error_threshold_pct` | Error rate threshold (%) | number (0–100, step 5) | 20 |
+| `stale_hours` | Stale source threshold (hours) | number (1–168, step 1) | 24 |
+| `min_row_count` | Min expected row count | number (0–100000, step 100) | 0 |
+| `notify_on_quality` | Report data quality issues | boolean | true |
+
+**CloudInsight Monitor — scheduler**
+
+| Key | Label | Type | Default |
+|-----|-------|------|---------|
+| `scan_interval_minutes` | Monitor interval (minutes) | number (5–120, step 5) | 60 |
 
 ---
 
@@ -93,10 +116,12 @@ docker run -p 3002:80 cloud-insight-ai
 |-------|-------|
 | Remote URL (dev) | `http://localhost:3002/remoteEntry.js` |
 | Remote URL (Docker) | `http://cloud-insight-ai/remoteEntry.js` |
+| Backend URL (internal) | `http://cloud-insight-ai-backend:8000` <!-- Docker service name; host-mapped port is 8002 --> |
 | Scope | `cloudInsightAI` |
 | Component | `./App` |
 | Route | `cloud-insight-ai` |
 | Icon | ☁️ |
+| i18n namespace | `cloudInsightAI` |
 
 ---
 
