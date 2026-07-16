@@ -1,6 +1,6 @@
 # CloudInsight AI
 
-**Repository:** https://github.com/KissSpinobleZsolt/spi-module-data-ingestion
+**Repository:** https://github.com/KissSpinobleZsolt/spi-module-cloud-insight-ai
 
 Webpack Module Federation remote for spin-core. Provides a UI for uploading and managing structured data sources — CSV, XLSX, and JSON files — with per-source processing status and row-count statistics.
 
