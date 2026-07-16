@@ -1,5 +1,23 @@
+"""
+CloudInsight AI — plugin backend (stub)
+
+This is a placeholder FastAPI service. It satisfies the docker-compose build
+so the platform starts, but has no real functionality yet.
+
+TODO: implement data ingestion endpoints:
+  POST /upload            — accept CSV / XLSX / JSON, parse and store rows
+  GET  /sources           — list ingested data sources with status + row counts
+  GET  /sources/{id}      — single source detail
+  DELETE /sources/{id}    — remove a source
+  GET  /sources/{id}/rows — paginated row browser
+
+The core backend proxies requests here via /api/plugin/cloudInsightAI/...
+Authentication: the Authorization header is forwarded verbatim from the proxy —
+validate it with verify_token() before touching any data.
+"""
+
 import os
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt, JWTError
 
@@ -16,7 +34,8 @@ app.add_middleware(
 )
 
 
-def verify_token(authorization: str | None = None):
+def verify_token(authorization: str | None = Header(default=None)):
+    """Validate the JWT forwarded by the core proxy."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     token = authorization.split(" ", 1)[1]
@@ -28,4 +47,5 @@ def verify_token(authorization: str | None = None):
 
 @app.get("/health")
 def health():
+    """Liveness probe used by docker-compose healthcheck."""
     return {"status": "ok", "service": "cloud-insight-ai-backend"}
