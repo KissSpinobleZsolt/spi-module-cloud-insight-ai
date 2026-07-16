@@ -20,7 +20,7 @@
     },
     {
       "name": "CloudInsight Monitor",
-      "type": "watcher",
+      "type": "custom",
       "description": "Monitors ingestion jobs and reports anomalies or failures.",
       "model": "",
       "system_prompt": "You are a data pipeline monitor. Analyze ingestion run summaries and report anomalies, failures, or data quality issues in structured form.",
