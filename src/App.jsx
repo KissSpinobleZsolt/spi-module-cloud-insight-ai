@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { FileDropzone } from './FileDropzone';
+import { ToastStack } from './Toast';
 
+// Seed rows shown before any files are uploaded
 const SOURCES = [
-  { id: 1, name: 'sales_q1_2025.csv',       type: 'CSV',  rows: 12_480, size: '1.2 MB', status: 'ready',      updated: '2 hours ago' },
-  { id: 2, name: 'customer_export.xlsx',     type: 'XLSX', rows: 4_305,  size: '840 KB', status: 'ready',      updated: 'Yesterday'   },
-  { id: 3, name: 'product_catalog.json',     type: 'JSON', rows: 892,    size: '310 KB', status: 'processing', updated: 'Just now'    },
-  { id: 4, name: 'warehouse_inventory.csv',  type: 'CSV',  rows: 0,      size: '2.1 MB', status: 'error',      updated: '3 days ago'  },
+  { id: 1, name: 'sales_q1_2025.csv',      type: 'CSV',  rows: 12_480, size: '1.2 MB', status: 'ready',      updated: '2 hours ago' },
+  { id: 2, name: 'customer_export.xlsx',    type: 'XLSX', rows: 4_305,  size: '840 KB', status: 'ready',      updated: 'Yesterday'   },
+  { id: 3, name: 'product_catalog.json',    type: 'JSON', rows: 892,    size: '310 KB', status: 'processing', updated: 'Just now'    },
+  { id: 4, name: 'warehouse_inventory.csv', type: 'CSV',  rows: 0,      size: '2.1 MB', status: 'error',      updated: '3 days ago'  },
 ];
 
 const STATUS_COLORS = {
@@ -24,7 +27,7 @@ function StatCard({ label, value, sub }) {
 }
 
 function StatusBadge({ status }) {
-  const c = STATUS_COLORS[status] ?? STATUS_COLORS.ready;
+  const c = STATUS_COLORS[status] ?? STATUS_COLORS.ready; // fall back to ready colours for unknown statuses
   return (
     <span style={{ ...s.badge, background: c.bg, color: c.text }}>
       <span style={{ ...s.badgeDot, background: c.dot }} />
@@ -33,29 +36,91 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function App({ presets }) {
-  const [dragging, setDragging] = useState(false);
-  const [sources, setSources] = useState(SOURCES);
+// API endpoint routed through the core proxy to the CloudInsight AI plugin backend
+const UPLOAD_ENDPOINT = '/api/plugin/cloudInsightAI/upload';
 
-  function handleDrop(e) {
-    e.preventDefault();
-    setDragging(false);
-    const files = Array.from(e.dataTransfer?.files ?? []);
-    if (!files.length) return;
+export default function App({ presets }) {
+  const [sources, setSources] = useState(SOURCES); // table rows (seed + uploaded files)
+  const [toasts, setToasts] = useState([]); // notification stack
+  const [uploading, setUploading] = useState(false); // true while any file upload is in-flight
+
+  // Append a new toast; id uses timestamp + random fraction to survive rapid fire calls
+  function addToast(type, title, body) {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, type, title, body }]);
+  }
+
+  // Remove a toast by id; wrapped in useCallback so ToastStack can memoise without re-renders
+  const dismissToast = useCallback(id => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // Called by FileDropzone when a file fails client-side validation
+  function handleValidationError(msg) {
+    addToast('error', 'Invalid file', msg);
+  }
+
+  // Called by FileDropzone with the list of client-validated files ready for upload
+  async function handleFiles(files) {
+    setUploading(true);
+
+    // Add all files as "processing" rows immediately so the table reflects in-flight state
     const newRows = files.map((f, i) => ({
-      id: Date.now() + i,
+      id: `upload-${Date.now()}-${i}`, // unique per-upload key; avoids collision with seed ids
       name: f.name,
-      type: f.name.split('.').pop().toUpperCase(),
+      type: f.name.split('.').pop().toUpperCase(), // derive display type from extension
       rows: 0,
       size: f.size > 1_048_576 ? `${(f.size / 1_048_576).toFixed(1)} MB` : `${Math.round(f.size / 1024)} KB`,
       status: 'processing',
       updated: 'Just now',
     }));
-    setSources(prev => [...newRows, ...prev]);
+    setSources(prev => [...newRows, ...prev]); // new rows appear at the top of the table
+
+    const token = localStorage.getItem('token'); // JWT stored by the host app's auth flow
+
+    for (const [idx, file] of files.entries()) {
+      const rowId = newRows[idx].id; // stable reference to the processing row for this file
+      const formData = new FormData();
+      formData.append('file', file); // binary payload
+      formData.append('bot_identifier', 'CloudInsight Monitor'); // audit label forwarded to backend
+
+      try {
+        const res = await fetch(UPLOAD_ENDPOINT, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}, // attach JWT when present
+          body: formData, // multipart/form-data; Content-Type is set automatically by the browser
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          // Update the row to "ready" and replace the placeholder row count with the backend's value
+          setSources(prev => prev.map(r =>
+            r.id === rowId
+              ? { ...r, status: 'ready', rows: data.record_count ?? 0, updated: 'Just now' }
+              : r,
+          ));
+          addToast('success', 'Ingestion complete', data.message);
+        } else {
+          setSources(prev => prev.map(r =>
+            r.id === rowId ? { ...r, status: 'error', updated: 'Just now' } : r,
+          ));
+          addToast('error', 'Ingestion failed', data.detail ?? data.message ?? 'Upload failed.');
+        }
+      } catch (err) {
+        // Network-level error (backend unreachable, CORS, timeout, etc.)
+        setSources(prev => prev.map(r =>
+          r.id === rowId ? { ...r, status: 'error', updated: 'Just now' } : r,
+        ));
+        addToast('error', 'Network error', err.message ?? 'Could not reach the backend.');
+      }
+    }
+
+    setUploading(false);
   }
 
-  const totalRows = sources.reduce((sum, s) => sum + s.rows, 0);
-  const readyCount = sources.filter(s => s.status === 'ready').length;
+  const totalRows = sources.reduce((sum, s) => sum + s.rows, 0); // aggregate across all sources
+  const readyCount = sources.filter(s => s.status === 'ready').length; // for the stat card sub-label
 
   return (
     <div style={s.root}>
@@ -67,24 +132,22 @@ export default function App({ presets }) {
         <button style={s.primaryBtn}>+ New Connection</button>
       </div>
 
+      {/* Summary metrics row */}
       <div style={s.stats}>
-        <StatCard label="Data Sources"   value={sources.length}                   sub={`${readyCount} ready`} />
-        <StatCard label="Total Records"  value={totalRows.toLocaleString()}        sub="across all sources" />
-        <StatCard label="Last Ingestion" value="2 hrs ago"                        sub="sales_q1_2025.csv" />
-        <StatCard label="Storage Used"   value="4.4 MB"                           sub="of workspace quota" />
+        <StatCard label="Data Sources"   value={sources.length}              sub={`${readyCount} ready`} />
+        <StatCard label="Total Records"  value={totalRows.toLocaleString()}  sub="across all sources" />
+        <StatCard label="Last Ingestion" value="2 hrs ago"                   sub="sales_q1_2025.csv" />
+        <StatCard label="Storage Used"   value="4.4 MB"                      sub="of workspace quota" />
       </div>
 
-      <div
-        style={{ ...s.dropZone, ...(dragging ? s.dropZoneActive : {}) }}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-      >
-        <span style={s.dropIcon}>☁️</span>
-        <p style={s.dropText}>Drop files here to ingest</p>
-        <p style={s.dropHint}>CSV, XLSX, JSON — max 50 MB per file</p>
-      </div>
+      {/* Drag-and-drop / click-to-browse upload zone */}
+      <FileDropzone
+        onFiles={handleFiles}
+        onError={handleValidationError}
+        uploading={uploading}
+      />
 
+      {/* Data sources table */}
       <div style={s.tableWrap}>
         <div style={s.tableHeader}>
           <p style={s.tableTitle}>Data Sources</p>
@@ -110,14 +173,15 @@ export default function App({ presets }) {
                 <td style={{ ...s.td, color: '#94a3b8' }}>{src.size}</td>
                 <td style={s.td}><StatusBadge status={src.status} /></td>
                 <td style={{ ...s.td, color: '#64748b' }}>{src.updated}</td>
-                <td style={s.td}>
-                  <button style={s.rowBtn}>⋯</button>
-                </td>
+                <td style={s.td}><button style={s.rowBtn}>⋯</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Global toast notification stack */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
@@ -192,35 +256,6 @@ const s = {
   statSub: {
     margin: 0,
     fontSize: '11px',
-    color: '#475569',
-  },
-  dropZone: {
-    border: '2px dashed #334155',
-    borderRadius: '12px',
-    padding: '28px',
-    textAlign: 'center',
-    marginBottom: '20px',
-    transition: 'border-color 0.15s, background 0.15s',
-    cursor: 'default',
-  },
-  dropZoneActive: {
-    borderColor: '#6366f1',
-    background: 'rgba(99,102,241,0.06)',
-  },
-  dropIcon: {
-    fontSize: '28px',
-    display: 'block',
-    marginBottom: '8px',
-  },
-  dropText: {
-    margin: '0 0 4px',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#cbd5e1',
-  },
-  dropHint: {
-    margin: 0,
-    fontSize: '12px',
     color: '#475569',
   },
   tableWrap: {
