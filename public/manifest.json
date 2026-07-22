@@ -3,7 +3,7 @@
   "scope": "cloudInsightAI",
   "component": "./App",
   "route": "cloud-insight-ai",
-  "icon": "☁️",
+  "icon": "favicon.webp",
   "roles": ["user", "admin"],
   "description": "Upload, process, and manage structured data sources for your workspace.",
   "remote_entry": "http://localhost:3002/remoteEntry.js",

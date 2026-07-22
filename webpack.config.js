@@ -41,7 +41,12 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './public/index.html',
     }),
-    new CopyPlugin({ patterns: [{ from: 'public/manifest.json', to: 'manifest.json' }] }),
+    new CopyPlugin({
+      patterns: [
+        { from: 'public/manifest.json', to: 'manifest.json' },
+        { from: 'public/favicon.webp',  to: 'favicon.webp'  }, // served alongside remoteEntry.js; referenced by manifest icon field
+      ],
+    }),
   ],
   devServer: {
     port: 3002,
