@@ -5,6 +5,11 @@ Provides bot-config persistence and file ingestion for the CloudInsight AI modul
 The core backend proxies all requests here via /api/plugin/cloudInsightAI/...
 Authentication: the Authorization header is forwarded verbatim from the proxy —
 every protected route validates it with verify_token() before touching data.
+
+Environment:
+  JWT_SECRET_KEY   — shared with the core backend (same value in docker-compose)
+  BOT_CONFIGS_FILE — path to the JSON file used as a lightweight bot config store
+  CORE_API_URL     — base URL of the core backend for log writes (default: http://backend:8000)
 """
 
 import csv
@@ -17,6 +22,8 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+
+import spin_logger
 
 JWT_SECRET = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
@@ -112,18 +119,35 @@ def health():
 
 
 @app.get("/bots/{bot_uuid}/config")
-def get_bot_config(bot_uuid: str, _: None = Depends(verify_token)):
+async def get_bot_config(
+    bot_uuid: str,
+    authorization: str | None = Header(default=None),
+    _: None = Depends(verify_token),
+):
     """Return stored config for a bot; returns empty config if not yet saved."""
+    spin_logger.log_module(authorization or "", "module.activated", {"action": "bot_config_read", "bot_uuid": bot_uuid})  # log module activation when the frontend loads bot config
     configs = _load_configs()
     return {"config": configs.get(bot_uuid, {}), "teams": []}  # teams not used by CloudInsight AI bots
 
 
 @app.put("/bots/{bot_uuid}/config")
-def update_bot_config(bot_uuid: str, payload: ConfigUpdatePayload, _: None = Depends(verify_token)):
+async def update_bot_config(
+    bot_uuid: str,
+    payload: ConfigUpdatePayload,
+    authorization: str | None = Header(default=None),
+    _: None = Depends(verify_token),
+):
     """Persist the full config for a bot (replaces previous value)."""
     configs = _load_configs()
     configs[bot_uuid] = payload.config  # full replacement, matching the core pattern
     _save_configs(configs)
+    spin_logger.log_bot(  # record config change against the bot's own log
+        authorization or "",
+        bot_uuid,
+        "bot.config.updated",
+        payload.config,
+        message="Bot configuration updated via CloudInsight AI",
+    )
     return {"config": configs[bot_uuid]}
 
 
@@ -131,6 +155,7 @@ def update_bot_config(bot_uuid: str, payload: ConfigUpdatePayload, _: None = Dep
 async def upload_file(
     file: UploadFile = File(...),
     bot_identifier: str = Form(default="CloudInsight Monitor"),  # audit label; not yet resolved to a UUID
+    authorization: str | None = Header(default=None),
     _: None = Depends(verify_token),
 ):
     """
@@ -144,6 +169,12 @@ async def upload_file(
             detail=f"data was errored: unsupported file type .{ext} — use CSV, XLSX, or JSON",
         )
 
+    spin_logger.log_module(  # log before reading so the event is recorded even if parsing fails
+        authorization or "",
+        "ingest.started",
+        {"filename": file.filename, "ext": ext, "bot_identifier": bot_identifier},
+    )
+
     content = await file.read()
     file_size = len(content)
 
@@ -152,15 +183,21 @@ async def upload_file(
     try:
         record_count = _count_records(content, ext)
     except Exception as exc:
-        return IngestionResult(
+        result = IngestionResult(
             message=f"data was errored: {exc}",
             file_size_bytes=file_size,
             status="error",
         )
+        spin_logger.log_module(
+            authorization or "",
+            "ingest.failed",
+            {"filename": file.filename, "error": str(exc), "file_size_bytes": file_size},
+        )
+        return result
 
     # Reject ingestion if the record count is below the configured minimum threshold
     if record_count < config.min_row_count:
-        return IngestionResult(
+        result = IngestionResult(
             message=(
                 f"data was errored: file has {record_count:,} records, "
                 f"below the minimum threshold of {config.min_row_count}"
@@ -169,6 +206,18 @@ async def upload_file(
             file_size_bytes=file_size,
             status="error",
         )
+        spin_logger.log_module(
+            authorization or "",
+            "ingest.rejected",
+            {"filename": file.filename, "record_count": record_count, "min_row_count": config.min_row_count},
+        )
+        return result
+
+    spin_logger.log_module(  # log successful ingestion with counts for observability
+        authorization or "",
+        "ingest.completed",
+        {"filename": file.filename, "record_count": record_count, "file_size_bytes": file_size},
+    )
 
     return IngestionResult(
         message=f"data was consumed and had {record_count:,} records ({file_size:,} bytes)",

@@ -52,7 +52,9 @@ Navigate to **CloudInsight AI** in the sidebar.
 
 **AI bots**
 
-Two bots are seeded for this module (visible in the floating bot panel, bottom-left of the module page). Both use the `ollama` provider and operate on the `sources` document collection (`principals` is a `module_documents` collection key, not a display name). The `model` field is left blank in the manifest — the admin selects a model at runtime via the bot config UI. Only the `custom`-type bot has a `scheduler` block; `communicator` bots are on-demand only.
+Two bots are declared in the manifest for this module (visible in the floating bot panel, bottom-left of the module page). Both use the `ollama` provider and operate on the `sources` document collection (`principals` is a `module_documents` collection key, not a display name). The `model` field is left blank in the manifest — the admin selects a model at runtime via the bot config UI. Only the `custom`-type bot has a `scheduler` block; `communicator` bots are on-demand only.
+
+> Bots are **not** seeded automatically when the module is registered. After adding the module go to **Admin → Modules → Reseed bots** to provision them.
 
 | Bot | Type | Purpose |
 |-----|------|---------|
@@ -125,17 +127,43 @@ docker run -p 3002:80 cloud-insight-ai
 
 ---
 
+## Backend environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JWT_SECRET_KEY` | `change-me-in-production` | Shared secret — must match the core backend value |
+| `BOT_CONFIGS_FILE` | `/app/data/bot_configs.json` | Persistent JSON store for per-bot configuration |
+| `CORE_API_URL` | `http://backend:8000` | Core backend base URL used for platform log writes |
+
+## Platform logging
+
+The plugin backend writes structured events to the core platform via `spin_logger.py` using the forwarded Bearer token. Events are visible in **Admin → Logs** under the `cloudInsightAI` scope (module logs) or the relevant bot UUID (bot logs).
+
+| Trigger | Event type | Destination |
+|---------|-----------|-------------|
+| `GET /bots/{uuid}/config` called | `module.activated` | module log |
+| `POST /upload` starts | `ingest.started` | module log |
+| `POST /upload` succeeds | `ingest.completed` | module log |
+| `POST /upload` parse error | `ingest.failed` | module log |
+| `POST /upload` below min rows | `ingest.rejected` | module log |
+| `PUT /bots/{uuid}/config` | `bot.config.updated` | bot log |
+
 ## File structure
 
 ```
 cloud-insight-ai/
 ├── src/
-│   ├── App.jsx        # Exposed component — data source manager UI
-│   ├── bootstrap.js   # Async boundary (required for MF)
-│   └── index.js       # Entry point
+│   ├── App.jsx           # Exposed component — data source manager UI
+│   ├── bootstrap.js      # Async boundary (required for MF)
+│   └── index.js          # Entry point
+├── backend/
+│   ├── main.py           # FastAPI plugin backend
+│   ├── spin_logger.py    # Fire-and-forget helpers for platform log endpoints
+│   ├── requirements.txt
+│   └── Dockerfile
 ├── public/
-│   ├── index.html     # Standalone shell with CDN React UMD scripts
-│   └── manifest.json  # Module descriptor — served at /manifest.json
+│   ├── index.html        # Standalone shell with CDN React UMD scripts
+│   └── manifest.json     # Module descriptor — served at /manifest.json
 ├── webpack.config.js
 └── Dockerfile
 ```
